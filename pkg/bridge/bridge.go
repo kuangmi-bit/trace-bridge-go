@@ -24,32 +24,65 @@ const (
 
 // TraceContext holds W3C Trace Context fields.
 type TraceContext struct {
-	Traceparent string            // "00-{trace-id}-{parent-id}-{flags}"
-	Tracestate  string            // "vendor=value,..."
-	Baggage     string            // "key=value,..."
-	PrivacyMode bool              // Strip baggage, regenerate span-id at boundaries
+	Traceparent string // "00-{trace-id}-{parent-id}-{flags}"
+	Tracestate  string // "vendor=value,..."
+	Baggage     string // "key=value,..."
+	PrivacyMode bool   // Strip baggage, regenerate span-id at boundaries
 }
 
 // ParseTraceparent splits a traceparent header into its components.
 // Returns traceID (32 hex), spanID (16 hex), flags (2 hex).
+//
+// Version 00 is parsed strictly: exactly 55 characters, four fields. Higher
+// versions are parsed positionally over the first 55 characters, as W3C Trace
+// Context §3.2.4 requires ("if a higher version is detected, the
+// implementation SHOULD try to parse it"), so a future revision does not break
+// the chain. Version ff is forbidden by the specification.
 func ParseTraceparent(tp string) (traceID, spanID, flags string, err error) {
-	parts := strings.Split(tp, "-")
-	if len(parts) != 4 {
-		return "", "", "", fmt.Errorf("invalid traceparent: expected 4 parts, got %d", len(parts))
+	if len(tp) < 55 {
+		return "", "", "", fmt.Errorf("invalid traceparent: length %d is shorter than the 55-character minimum", len(tp))
 	}
-	if parts[0] != "00" {
-		return "", "", "", fmt.Errorf("unsupported traceparent version: %s (expected 00)", parts[0])
+	if tp[2] != '-' {
+		return "", "", "", fmt.Errorf("invalid traceparent: malformed version prefix")
 	}
-	if len(parts[1]) != 32 {
-		return "", "", "", fmt.Errorf("invalid trace-id length: %d (expected 32)", len(parts[1]))
+	version := tp[:2]
+	if !isHex(version) {
+		return "", "", "", fmt.Errorf("invalid traceparent: version is not hexadecimal: %q", version)
 	}
-	if len(parts[2]) != 16 {
-		return "", "", "", fmt.Errorf("invalid parent-id length: %d (expected 16)", len(parts[2]))
+	if version == "ff" {
+		return "", "", "", fmt.Errorf("invalid traceparent: version ff is forbidden")
 	}
-	if len(parts[3]) != 2 {
-		return "", "", "", fmt.Errorf("invalid trace-flags length: %d (expected 2)", len(parts[3]))
+	if version == "00" && len(tp) != 55 {
+		return "", "", "", fmt.Errorf("invalid traceparent: version 00 must be exactly 55 characters, got %d", len(tp))
 	}
-	return parts[1], parts[2], parts[3], nil
+	if tp[35] != '-' || tp[52] != '-' {
+		return "", "", "", fmt.Errorf("invalid traceparent: malformed field delimiters")
+	}
+
+	traceID, spanID, flags = tp[3:35], tp[36:52], tp[53:55]
+	if !isHex(traceID) || !isHex(spanID) || !isHex(flags) {
+		return "", "", "", fmt.Errorf("invalid traceparent: non-hexadecimal field")
+	}
+	if traceID == "00000000000000000000000000000000" {
+		return "", "", "", fmt.Errorf("invalid traceparent: all-zero trace-id")
+	}
+	if spanID == "0000000000000000" {
+		return "", "", "", fmt.Errorf("invalid traceparent: all-zero parent-id")
+	}
+	return traceID, spanID, flags, nil
+}
+
+// isHex reports whether s is a non-empty lowercase-or-uppercase hexadecimal string.
+func isHex(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // NewSpanID generates a cryptographically random 16-char hex span ID.
@@ -62,12 +95,17 @@ func NewSpanID() (string, error) {
 }
 
 // UpdateSpanID replaces the span-id portion of a traceparent.
+// The version field is preserved. Any trailing fields introduced by a higher
+// version are not carried over; the result is always a four-field value.
 func UpdateSpanID(traceparent string, newSpanID string) (string, error) {
+	if len(newSpanID) != 16 || !isHex(newSpanID) || newSpanID == "0000000000000000" {
+		return "", fmt.Errorf("invalid span-id: %q (expected 16 hexadecimal characters, not all zero)", newSpanID)
+	}
 	traceID, _, flags, err := ParseTraceparent(traceparent)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("00-%s-%s-%s", traceID, newSpanID, flags), nil
+	return fmt.Sprintf("%s-%s-%s-%s", traceparent[:2], traceID, newSpanID, flags), nil
 }
 
 // AppendTracestate adds an entry to a tracestate string if not already present.

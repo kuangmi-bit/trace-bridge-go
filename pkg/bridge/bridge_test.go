@@ -121,7 +121,8 @@ func TestBR2_MCPToA2APropagation(t *testing.T) {
 // BR-3: Bridge chaining (A2A → MCP → A2A)
 // GIVEN: A2A message → MCP → A2A message
 // THEN:  All three share same trace-id, each generates new span-id,
-//        tracestate has bridge marker exactly once
+//
+//	tracestate has bridge marker exactly once
 func TestBR3_BridgeChaining(t *testing.T) {
 	// Step 1: A2A → MCP
 	a2aMeta := map[string]any{
@@ -408,5 +409,70 @@ func TestBR14_MCPToA2ARoundTrip(t *testing.T) {
 	}
 	if traceID != "0af7651916cd43dd8448eb211c80319c" {
 		t.Errorf("trace-id changed in round trip: got %s", traceID)
+	}
+}
+
+// W3C §3.2.4: higher versions are parsed positionally so the chain survives a
+// future revision; version ff is forbidden; version 00 is exactly 55 chars.
+func TestParseTraceparent_VersionHandling(t *testing.T) {
+	base := testTraceparent
+
+	t.Run("higher version parsed positionally", func(t *testing.T) {
+		in := "01" + base[2:]
+		traceID, spanID, flags, err := ParseTraceparent(in)
+		if err != nil {
+			t.Fatalf("version 01 should parse: %v", err)
+		}
+		if traceID != "0af7651916cd43dd8448eb211c80319c" || spanID != "b7ad6b7169203331" || flags != "01" {
+			t.Errorf("fields not parsed positionally: %s %s %s", traceID, spanID, flags)
+		}
+	})
+
+	t.Run("version ff forbidden", func(t *testing.T) {
+		if _, _, _, err := ParseTraceparent("ff" + base[2:]); err == nil {
+			t.Error("version ff must be rejected")
+		}
+	})
+
+	t.Run("version 00 must be exactly 55 chars", func(t *testing.T) {
+		if _, _, _, err := ParseTraceparent(base + "-00"); err == nil {
+			t.Error("version 00 with trailing field must be rejected")
+		}
+	})
+
+	t.Run("all-zero trace-id rejected", func(t *testing.T) {
+		in := "00-00000000000000000000000000000000-b7ad6b7169203331-01"
+		if _, _, _, err := ParseTraceparent(in); err == nil {
+			t.Error("all-zero trace-id must be rejected")
+		}
+	})
+
+	t.Run("all-zero parent-id rejected", func(t *testing.T) {
+		in := "00-0af7651916cd43dd8448eb211c80319c-0000000000000000-01"
+		if _, _, _, err := ParseTraceparent(in); err == nil {
+			t.Error("all-zero parent-id must be rejected")
+		}
+	})
+}
+
+func TestUpdateSpanID_PreservesVersion(t *testing.T) {
+	in := "01" + testTraceparent[2:]
+	out, err := UpdateSpanID(in, "1111222233334444")
+	if err != nil {
+		t.Fatalf("UpdateSpanID failed: %v", err)
+	}
+	if out[:2] != "01" {
+		t.Errorf("version not preserved: %q", out[:2])
+	}
+	if _, _, _, err := ParseTraceparent(out); err != nil {
+		t.Errorf("rewritten value must still parse: %v", err)
+	}
+}
+
+func TestUpdateSpanID_RejectsBadSpanID(t *testing.T) {
+	for _, bad := range []string{"", "short", "0000000000000000", "zzzzzzzzzzzzzzzz"} {
+		if _, err := UpdateSpanID(testTraceparent, bad); err == nil {
+			t.Errorf("expected error for span-id %q", bad)
+		}
 	}
 }

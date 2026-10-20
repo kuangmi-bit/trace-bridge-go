@@ -18,7 +18,7 @@ Rules applied at every hop:
 - `trace-id` is invariant; a new `span-id` per hop — taken from the host's OpenTelemetry SDK when it has one, or from `NewSpanID` (CSPRNG, 16 hex chars) when it does not.
 - `tracestate` is preserved and `deeparchi=br:1` is added once at the left of the list (W3C §3.5 puts new entries where truncation reaches last; a second bridge over an already-bridged context does not re-wrap).
 - `baggage` is forwarded only outside privacy mode; `StripBaggage` removes it while keeping the trace chain.
-- Missing or malformed `traceparent` returns an error rather than propagating garbage; the caller decides whether to start a new root trace.
+- Missing or malformed `traceparent` returns an error rather than propagating garbage; the caller decides whether to start a new root trace. Version 00 is parsed strictly (exactly 55 characters); higher versions are parsed positionally over the first 55 characters as W3C §3.2.4 requires, so a future revision does not break the chain. Version `ff` and all-zero ids are rejected, and `UpdateSpanID` preserves the inbound version.
 
 The MCP side needs no vendor key: MCP specification 2026-07-28 reserves `traceparent`, `tracestate` and `baggage` as unprefixed `_meta` keys and requires W3C Trace Context / W3C Baggage formats ([§ `_meta`](https://modelcontextprotocol.io/specification/2026-07-28/basic)). A2A v1.0.1 has no equivalent reserved field, so the A2A side uses the extension URI above.
 
@@ -89,7 +89,7 @@ bridged := bridge.IsBridged(ts)
 go test ./...
 ```
 
-14 test functions / 21 cases, covering both directions, multi-hop chaining, MCP→A2A round-trip readability, privacy mode, malformed input and idempotence.
+17 test functions / 29 cases, covering both directions, multi-hop chaining, MCP→A2A round-trip readability, version handling, privacy mode, malformed input and idempotence.
 
 ## Status
 
