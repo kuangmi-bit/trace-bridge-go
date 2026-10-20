@@ -1,6 +1,6 @@
 # trace-bridge-go
 
-A2A ↔ MCP W3C Trace Context bridge — Go reference implementation of *Cross-Protocol Trace Context Bridge* v0.1.
+A2A ↔ MCP W3C Trace Context bridge — Go reference implementation of the *Cross-Protocol Trace Context Bridge* specification (as of spec v0.3).
 
 When an A2A agent invokes an MCP tool, the trace stops at the protocol boundary: the A2A message carries one trace context, the tool call starts another, and the two show up in the backend as unrelated trees. This package carries one W3C trace context across that boundary in both directions, using each protocol's own metadata extension point — no protocol extension, no side channel.
 
@@ -15,7 +15,7 @@ Specification: [`deeparchi-ai/macs` → `trace-bridge/spec.md`](https://github.c
 
 Rules applied at every hop:
 
-- `trace-id` is invariant; a new `span-id` is generated per hop (CSPRNG, 16 hex chars).
+- `trace-id` is invariant; a new `span-id` per hop — taken from the host's OpenTelemetry SDK when it has one, or from `NewSpanID` (CSPRNG, 16 hex chars) when it does not.
 - `tracestate` is preserved and `deeparchi=br:1` is appended once (idempotent — a second bridge over an already-bridged context does not re-wrap).
 - `baggage` is forwarded only outside privacy mode; `StripBaggage` removes it while keeping the trace chain.
 - Missing or malformed `traceparent` returns an error rather than propagating garbage; the caller decides whether to start a new root trace.
@@ -78,7 +78,7 @@ bridged := bridge.IsBridged(ts)
 
 ## What this package does not do
 
-- **It does not create spans.** It moves context; span creation and parenting belong to your OpenTelemetry instrumentation. The parent of the MCP client span must be the currently active span in the calling agent, as usual.
+- **It does not create spans and does not choose parents.** It moves context; span creation and parent selection belong to your OpenTelemetry instrumentation. Per spec §5.0, an outbound span's parent comes from the local operation Context, and the extracted remote Context is only a fallback when no local span exists.
 - **It does not cover operations with no metadata field.** In A2A v1.0.1, `GetTask` and `SubscribeToTask` requests carry no `metadata`, so a message-level carrier cannot reach them; transport headers or a task-level trace id would be needed, and neither is implemented here.
 - **It does not strip baggage on its own.** Privacy mode is opt-in via `StripBaggage`; cross-tenant deployments must call it.
 - **It is not a sampling or export layer.** No OTel SDK, no exporter, no backend assumptions.
@@ -93,7 +93,7 @@ go test ./...
 
 ## Status
 
-Working draft v0.1 reference implementation (2026-07-03), tracked against the v0.1 spec. Interfaces may change; it is not production-hardened.
+Reference implementation v0.1 (2026-07-03), implementing the mapping rules of the specification as of spec v0.3. Interfaces may change; it is not production-hardened. Known deviation: `tracestate` entries are appended to the right, while W3C §3.5 recommends the left.
 
 ## License
 
