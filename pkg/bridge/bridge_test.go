@@ -89,7 +89,12 @@ func TestBR2_MCPToA2APropagation(t *testing.T) {
 		t.Fatalf("BridgeMCPToA2A failed: %v", err)
 	}
 
-	tp, ok := result["traceparent"].(string)
+	inner, ok := result[ExtensionURI].(map[string]any)
+	if !ok {
+		t.Fatalf("trace context not nested under %s: %#v", ExtensionURI, result)
+	}
+
+	tp, ok := inner["traceparent"].(string)
 	if !ok {
 		t.Fatal("traceparent missing in result")
 	}
@@ -107,7 +112,7 @@ func TestBR2_MCPToA2APropagation(t *testing.T) {
 		t.Errorf("span-id not regenerated")
 	}
 
-	ts := result["tracestate"].(string)
+	ts := inner["tracestate"].(string)
 	if !strings.Contains(ts, "deeparchi=br:1") {
 		t.Errorf("tracestate missing bridge marker: %q", ts)
 	}
@@ -145,13 +150,15 @@ func TestBR3_BridgeChaining(t *testing.T) {
 		t.Fatalf("Step 2 (MCP→A2A) failed: %v", err)
 	}
 
-	tp2 := a2aResult["traceparent"].(string)
+	a2aInner, ok := a2aResult[ExtensionURI].(map[string]any)
+	if !ok {
+		t.Fatalf("Step 2 (MCP→A2A) did not nest context under %s: %#v", ExtensionURI, a2aResult)
+	}
+	tp2 := a2aInner["traceparent"].(string)
 	traceID2, spanID2, _, _ := ParseTraceparent(tp2)
 
 	// Step 3: A2A → MCP again (using output of step 2)
-	mcpInput2 := map[string]any{
-		ExtensionURI: a2aResult,
-	}
+	mcpInput2 := a2aResult
 
 	mcpResult, err := BridgeA2AToMCP(mcpInput2)
 	if err != nil {
@@ -365,5 +372,33 @@ func Test_NoTraceContext_MCP(t *testing.T) {
 	_, err := BridgeMCPToA2A(emptyMeta)
 	if err == nil {
 		t.Error("expected error for missing trace context, got nil")
+	}
+}
+
+// BR-14: MCP → A2A output is readable as A2A metadata
+// GIVEN: MCP _meta with traceparent
+// WHEN:  Bridged to A2A and then read back with NewTraceContextFromA2A
+// THEN:  round-trip succeeds and trace-id is preserved
+// Regression: BridgeMCPToA2A used to return a flat map, so its own output
+// could not be read back and did not match Message.metadata's expected shape.
+func TestBR14_MCPToA2ARoundTrip(t *testing.T) {
+	mcpMeta := map[string]any{"traceparent": testTraceparent}
+
+	a2aMeta, err := BridgeMCPToA2A(mcpMeta)
+	if err != nil {
+		t.Fatalf("BridgeMCPToA2A failed: %v", err)
+	}
+
+	tc, err := NewTraceContextFromA2A(a2aMeta)
+	if err != nil {
+		t.Fatalf("output not readable as A2A metadata: %v", err)
+	}
+
+	traceID, _, _, err := ParseTraceparent(tc.Traceparent)
+	if err != nil {
+		t.Fatalf("ParseTraceparent failed: %v", err)
+	}
+	if traceID != "0af7651916cd43dd8448eb211c80319c" {
+		t.Errorf("trace-id changed in round trip: got %s", traceID)
 	}
 }

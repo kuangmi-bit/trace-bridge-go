@@ -50,7 +50,7 @@ a2aMeta, err := bridge.BridgeMCPToA2A(req.Params.Meta)
 if err != nil {
     // no usable trace context
 }
-msg.Metadata = map[string]any{bridge.ExtensionURI: a2aMeta}
+msg.Metadata = a2aMeta // already nested under bridge.ExtensionURI
 ```
 
 Lower-level pieces, when the caller wants to control span-id generation:
@@ -68,7 +68,7 @@ bridged := bridge.IsBridged(ts)
 | Symbol | Purpose |
 |---|---|
 | `BridgeA2AToMCP(metadata) (map[string]any, error)` | Full A2A → MCP hop |
-| `BridgeMCPToA2A(meta) (map[string]any, error)` | Full MCP → A2A hop |
+| `BridgeMCPToA2A(meta) (map[string]any, error)` | Full MCP → A2A hop, nested under `ExtensionURI` |
 | `NewTraceContextFromA2A(metadata)` / `NewTraceContextFromMCP(meta)` | Extract into `TraceContext` |
 | `(*TraceContext).ToA2A(spanID)` / `ToMCP(spanID)` | Serialise into the other side's shape |
 | `ParseTraceparent`, `UpdateSpanID`, `NewSpanID` | W3C field handling |
@@ -89,7 +89,7 @@ bridged := bridge.IsBridged(ts)
 go test ./...
 ```
 
-13 test functions / 20 cases, covering both directions, multi-hop chaining, privacy mode, malformed input and idempotence.
+14 test functions / 21 cases, covering both directions, multi-hop chaining, MCP→A2A round-trip readability, privacy mode, malformed input and idempotence.
 
 ## Status
 

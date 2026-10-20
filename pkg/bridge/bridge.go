@@ -194,6 +194,9 @@ func BridgeA2AToMCP(metadata map[string]any) (map[string]any, error) {
 }
 
 // BridgeMCPToA2A performs a complete MCP → A2A bridge operation.
+// Extracts trace context from MCP _meta, generates a new span, and returns an
+// A2A metadata map with the context nested under ExtensionURI, ready to assign
+// to Message.metadata.
 func BridgeMCPToA2A(meta map[string]any) (map[string]any, error) {
 	tc, err := NewTraceContextFromMCP(meta)
 	if err != nil {
@@ -205,7 +208,12 @@ func BridgeMCPToA2A(meta map[string]any) (map[string]any, error) {
 		return nil, fmt.Errorf("failed to generate span ID: %w", err)
 	}
 
-	return tc.ToA2A(newSpanID)
+	inner, err := tc.ToA2A(newSpanID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{ExtensionURI: inner}, nil
 }
 
 // StripBaggage returns a new TraceContext with baggage removed (privacy mode).
