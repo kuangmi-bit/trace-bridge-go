@@ -18,8 +18,10 @@ const (
 	// BridgeTracestateEntry identifies bridge-propagated traces.
 	BridgeTracestateEntry = "deeparchi=br:1"
 
-	// SpecVersion is the bridge specification version.
-	SpecVersion = "0.1"
+	// SpecVersion is the revision of the bridge specification this package
+	// tracks. It is not the wire token: the tracestate entry stays
+	// `deeparchi=br:1` until the entry's meaning changes incompatibly.
+	SpecVersion = "0.3.1"
 )
 
 // TraceContext holds W3C Trace Context fields.
