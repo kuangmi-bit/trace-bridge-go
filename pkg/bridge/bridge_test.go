@@ -316,6 +316,14 @@ func TestAppendTracestate_Idempotent(t *testing.T) {
 	if strings.Count(result2, BridgeTracestateEntry) != 1 {
 		t.Errorf("entry duplicated: %q", result2)
 	}
+
+	// W3C §3.5: new entries go to the left of the list
+	if !strings.HasPrefix(result, BridgeTracestateEntry+",") {
+		t.Errorf("entry not leftmost (W3C §3.5): %q", result)
+	}
+	if !strings.HasSuffix(result, base) {
+		t.Errorf("existing entries must be preserved in order: %q", result)
+	}
 }
 
 // Test UpdateSpanID preserves trace-id and flags

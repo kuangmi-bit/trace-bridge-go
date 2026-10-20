@@ -16,7 +16,7 @@ Specification: [`deeparchi-ai/macs` → `trace-bridge/spec.md`](https://github.c
 Rules applied at every hop:
 
 - `trace-id` is invariant; a new `span-id` per hop — taken from the host's OpenTelemetry SDK when it has one, or from `NewSpanID` (CSPRNG, 16 hex chars) when it does not.
-- `tracestate` is preserved and `deeparchi=br:1` is appended once (idempotent — a second bridge over an already-bridged context does not re-wrap).
+- `tracestate` is preserved and `deeparchi=br:1` is added once at the left of the list (W3C §3.5 puts new entries where truncation reaches last; a second bridge over an already-bridged context does not re-wrap).
 - `baggage` is forwarded only outside privacy mode; `StripBaggage` removes it while keeping the trace chain.
 - Missing or malformed `traceparent` returns an error rather than propagating garbage; the caller decides whether to start a new root trace.
 
@@ -93,7 +93,7 @@ go test ./...
 
 ## Status
 
-Reference implementation v0.1 (2026-07-03), implementing the mapping rules of the specification as of spec v0.3. Interfaces may change; it is not production-hardened. Known deviation: `tracestate` entries are appended to the right, while W3C §3.5 recommends the left.
+Reference implementation v0.1 (2026-07-03), implementing the mapping rules of the specification as of spec v0.3. Interfaces may change; it is not production-hardened.
 
 ## License
 

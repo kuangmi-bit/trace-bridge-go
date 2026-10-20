@@ -71,6 +71,9 @@ func UpdateSpanID(traceparent string, newSpanID string) (string, error) {
 }
 
 // AppendTracestate adds an entry to a tracestate string if not already present.
+// W3C Trace Context §3.5 places a newly added or modified entry at the beginning
+// (left) of the list, where size truncation reaches last; the bridge entry
+// therefore goes first rather than last, despite the historical function name.
 func AppendTracestate(tracestate, entry string) string {
 	if tracestate == "" {
 		return entry
@@ -78,7 +81,7 @@ func AppendTracestate(tracestate, entry string) string {
 	if strings.Contains(tracestate, entry) {
 		return tracestate // Already present; bridge is idempotent
 	}
-	return tracestate + "," + entry
+	return entry + "," + tracestate
 }
 
 // IsBridged checks if a tracestate indicates prior bridge propagation.
