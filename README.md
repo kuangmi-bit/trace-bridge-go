@@ -1,6 +1,6 @@
 # trace-bridge-go
 
-A2A ↔ MCP W3C Trace Context bridge — Go reference implementation of the *Cross-Protocol Trace Context Bridge* specification (as of spec v0.3).
+A2A ↔ MCP W3C Trace Context bridge — Go reference implementation of the *Cross-Protocol Trace Context Bridge* specification (v0.3.2 at the time of writing).
 
 When an A2A agent invokes an MCP tool, the trace stops at the protocol boundary: the A2A message carries one trace context, the tool call starts another, and the two show up in the backend as unrelated trees. This package carries one W3C trace context across that boundary in both directions, using each protocol's own metadata extension point — no protocol extension, no side channel.
 
@@ -93,8 +93,8 @@ go test ./...
 
 ## Status
 
-Reference implementation v0.1 (2026-07-03), implementing the mapping rules of the specification as of spec v0.3. Interfaces may change; it is not production-hardened.
+Reference implementation (started 2026-07-03), tracking the mapping rules of the current specification revision (v0.3.2 at the time of writing). Interfaces may change; it is not production-hardened.
 
 ## License
 
-No license file is declared in this repository yet. The specification it implements is MIT-licensed as part of `deeparchi-ai/macs`. Open an issue if you want to reuse the code.
+MIT — see [`LICENSE`](LICENSE). Same terms as the specification it implements, which is MIT-licensed as part of `deeparchi-ai/macs`.
